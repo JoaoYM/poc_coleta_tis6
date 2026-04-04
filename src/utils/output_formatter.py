@@ -1,8 +1,23 @@
 from typing import List, Dict, Any
 from datetime import datetime
+from contextlib import contextmanager
 from rich.console import Console
 from rich.table import Table
 from rich import box
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
+
+
+class _ProgressUpdater:
+    """Classe auxiliar interna para expor métodos de atualização seguros para os Fetchers."""
+    def __init__(self, progress_instance: Progress, task_id):
+        self._progress = progress_instance
+        self._task_id = task_id
+
+    def update_status(self, page: int, total_pages: int):
+        self._progress.update(self._task_id, description=f"[cyan]Baixando pág {page}/{total_pages}...")
+
+    def advance_success(self, total_repos: int):
+        self._progress.update(self._task_id, advance=1, description=f"[green]Acumulado: {total_repos} repos...")
 
 
 class RepositoryOutputFormatter:
@@ -16,6 +31,22 @@ class RepositoryOutputFormatter:
         except (ValueError, TypeError):
             return date_str
     
+    @staticmethod
+    @contextmanager
+    def fetch_progress_context(total_pages: int):
+        """Context Manager que isola a lógica visual da barra de progresso."""
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TextColumn("({task.completed}/{task.total} págs)"),
+            TimeElapsedColumn()
+        ) as progress:
+            task = progress.add_task("[cyan]Minerando GitHub API...", total=total_pages)
+            # Retorna apenas o objeto seguro de atualização, sem vazar o "rich" para fora
+            yield _ProgressUpdater(progress, task)
+            
     @staticmethod
     def print_repositories(repos: List[Dict[str, Any]]) -> None:
         console = Console()
@@ -51,7 +82,7 @@ class RepositoryOutputFormatter:
     def print_summary(repos: List[Dict[str, Any]]) -> None:
         console = Console()
         
-        total_stars = sum(repo['stargazerCount'] for repo in repos)
+        total_stars = sum(repo.get('stargazerCount', 0) for repo in repos)
         total_releases = sum(repo.get('releases_count', 0) for repo in repos)
         
         stats_table = Table(title="📊 Totais Gerais (Processo)", box=box.ROUNDED,
@@ -63,16 +94,6 @@ class RepositoryOutputFormatter:
         stats_table.add_row("Releases Totais (Atividade)", f"{total_releases:,}")
         
         console.print(stats_table)
-    
-    @staticmethod
-    def print_page_progress(page: int, total_pages: int, repos_this_page: int, 
-                           total_repos: int) -> None:
-        console = Console()
-        console.print(f"📄 Coletando página {page}/{total_pages}...", style="bold blue")
-        console.print(f"✅ Coletados {repos_this_page} repositórios desta página", 
-                     style="green")
-        console.print(f"📊 Total acumulado: {total_repos} repositórios", 
-                     style="cyan")
     
     @staticmethod
     def print_fetch_start(method: str, pages: int = 100) -> None:
