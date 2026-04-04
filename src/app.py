@@ -2,7 +2,7 @@ import sys
 from src.services.fetcher_factory import RepositoryFetcherFactory
 from src.services.repository_manager import RepositoryManager
 from src.utils.output_formatter import RepositoryOutputFormatter
-from src.services.metrics_collector import MetricsCollector # NOVO IMPORT
+from src.services.metrics_collector import MetricsCollector
 
 def display_menu(options: list):
     print("=" * 60)
@@ -15,9 +15,9 @@ def display_menu(options: list):
         label = "🐙 Coletar Top 1.000 Repositórios (GitHub CLI)" if method == 'cli' else "🌐 Coletar Top 1.000 Repositórios (API Direta)"
         print(f"  [{i}] {label}")
     
-    # Adiciona a opção estática para rodar a análise CK (Lab02S01)
+    # Atualizado para refletir o processamento em lote do Lab02S02
     next_opt = len(options) + 1
-    print(f"  [{next_opt}] ⚙️  Executar Análise CK (1 Repositório - Lab02S01)")
+    print(f"  [{next_opt}] ⚙️  Executar Extração CK em Lote (1.000 Repositórios - Lab02S02)")
     
     print("\n  [0] Sair")
     print("-" * 60)
@@ -32,7 +32,6 @@ def run_collection(method: str, save_json: bool, save_csv: bool):
         fetcher = RepositoryFetcherFactory.create(method)
         manager = RepositoryManager(fetcher)
         
-        # 10 páginas de 100 itens = 1000 repositórios
         repos = manager.fetch_repositories(pages=100, save_json=save_json, save_csv=save_csv)
         manager.display_results(repos)
         
@@ -40,14 +39,15 @@ def run_collection(method: str, save_json: bool, save_csv: bool):
         RepositoryOutputFormatter.print_error(f"Erro na execução: {e}")
 
 def run_ck_analysis():
-    """Executa o script de clone e coleta do CK"""
+    """Executa o script de clone, coleta do CK e sumarização (Lote)"""
     try:
         print("\n" + "=" * 40)
-        print("Iniciando Automação de Clone e Análise CK...")
+        print("Iniciando Automação de Clone e Extração de Métricas (Em Lote)...")
         print("=" * 40 + "\n")
         
         collector = MetricsCollector()
-        collector.run_first_repository()
+        # Chamada atualizada para o método de processamento em lote
+        collector.process_all_repositories()
         
     except Exception as e:
         RepositoryOutputFormatter.print_error(f"Erro ao executar a automação: {e}")
@@ -70,7 +70,7 @@ def main(save_json=False, save_csv=False):
             selected_method = available_methods[int(choice) - 1]
             run_collection(selected_method, save_json, save_csv)
         
-        # Verifica se escolheu a análise do CK
+        # Verifica se escolheu a extração em lote do CK
         elif choice == ck_option:
             run_ck_analysis()
             
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     should_save_json = "--json" in sys.argv
     should_save_csv = "--csv" in sys.argv
     try:
-        # Por padrão, vamos forçar o save_csv=True pois precisamos do arquivo para o CK ler depois
+        # Por padrão, mantemos save_csv=True pois precisamos do arquivo para a base do lote
         main(save_json=should_save_json, save_csv=True)
     except KeyboardInterrupt:
         print("\n\n⚠️ Interrompido pelo usuário. Saindo...")
