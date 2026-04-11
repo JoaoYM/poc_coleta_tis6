@@ -16,6 +16,7 @@ O problema central consiste em investigar se características inerentes ao ciclo
 
 ### 1.3 Questões de Pesquisa (RQs)
 Para guiar esta investigação, definiram-se quatro Questões de Pesquisa principais:
+
 * **RQ01:** Qual a relação entre a popularidade (estrelas) e a qualidade estrutural?
 * **RQ02:** Sistemas mais maduros (antigos) tendem a possuir uma qualidade estrutural inferior?
 * **RQ03:** A frequência de *releases* (atividade) impacta a qualidade interna do código?
@@ -29,6 +30,7 @@ Para guiar esta investigação, definiram-se quatro Questões de Pesquisa princi
 
 ### 1.5 Hipóteses Informais (Formuladas *a priori*)
 Antes da execução do experimento e da coleta dos dados, as seguintes premissas foram estabelecidas:
+
 * **Hipótese 1 (Ref. RQ01):** Espera-se que repositórios mais populares possuam uma melhor qualidade estrutural, pois a alta visibilidade atrai revisores para manter a manutenibilidade.
 * **Hipótese 2 (Ref. RQ02):** Espera-se que repositórios mais antigos apresentem degradação na qualidade (maior acoplamento e menor coesão) devido ao acúmulo de débito técnico ao longo dos anos.
 * **Hipótese 3 (Ref. RQ03):** Espera-se que alta atividade de *releases* resulte em melhor qualidade, indicando ciclos ágeis com refatorações constantes.
@@ -39,8 +41,22 @@ Antes da execução do experimento e da coleta dos dados, as seguintes premissas
 ## 2. Metodologia
 
 ### 2.1 Processo de Coleta e Extração
-A coleta foi dividida em duas etapas automatizadas em linguagem Python. Inicialmente, utilizou-se a API GraphQL do GitHub para recuperar a listagem dos 1.000 repositórios primariamente desenvolvidos em Java com o maior número de estrelas. 
-Na segunda etapa, implementou-se um *pipeline* de clonagem superficial (*shallow clone* utilizando `git clone --depth 1 --single-branch`) iterativo. Para cada repositório baixado, a ferramenta de análise estática CK (ANICHE et al., 2021) foi acionada para extrair a Árvore de Sintaxe Abstrata (AST) e calcular as métricas. Após a extração dos valores e sumarização com a biblioteca Pandas, os binários clonados eram deletados localmente, permitindo um processamento escalável que totalizou cerca de 16 horas de execução.
+
+A coleta de dados foi estruturada em um *pipeline* automatizado em Python, executado ao longo de aproximadamente 16 horas. O processo iterativo consistiu nas seguintes etapas principais:
+
+1. **Mineração de Repositórios (API GraphQL):** Utilizou-se a API do GitHub para recuperar a listagem dos 1.000 repositórios primariamente desenvolvidos em Java com o maior número de estrelas (popularidade).
+
+2. **Clonagem Superficial Iterativa:**
+   Para otimizar espaço e tempo de rede, implementou-se um *shallow clone* (`git clone --depth 1 --single-branch`) focado apenas no estado mais recente do código-fonte.
+
+3. **Análise Estática e Extração de AST:**
+   Para cada repositório baixado, a ferramenta de análise estática CK (ANICHE et al., 2021) foi acionada para construir a Árvore de Sintaxe Abstrata (AST) e calcular as métricas estruturais no nível das classes.
+
+4. **Consolidação de Dados (Pandas):**
+   Os valores brutos extraídos pelo CK foram sumarizados utilizando a biblioteca Pandas em Python.
+
+5. **Limpeza do Ambiente Local:**
+   Após a extração e consolidação dos dados, os binários e arquivos clonados de cada repositório eram imediatamente deletados localmente, garantindo a escalabilidade do processamento sem sobrecarregar o armazenamento físico.
 
 ### 2.2 Variáveis e Métricas
 * **Variáveis Independentes:** Estrelas (*stargazerCount*), Maturidade (Idade calculada a partir de *createdAt*), Atividade (*releases*) e Tamanho (Somatório de *LOC*).
@@ -82,8 +98,8 @@ A tabela abaixo apresenta as medidas centrais e de dispersão para o conjunto de
 > *(Legenda: Figura 4 - Análise do impacto nulo do número de Releases nas métricas de Acoplamento e Coesão).*
 
 **RQ04: Tamanho vs. Qualidade**
-![Forte correlação positiva e significativa (p-value < 0.05) entre o tamanho absoluto (LOC) e o aumento do Acoplamento (CBO)](figures/rq_04.png)
-> *(Legenda: Figura 5 - Forte correlação positiva e significativa (p-value < 0.05) entre o tamanho absoluto (LOC) e o aumento do Acoplamento (CBO)).*
+![Correlação moderada (0.32), porém significativa (p-value < 0.05) entre o tamanho absoluto (LOC) e o aumento do Acoplamento (CBO)](figures/rq_04.png)
+> *(Legenda: Figura 5 - Correlação moderada (0.32), porém significativa (p-value < 0.05) entre o tamanho absoluto (LOC) e o aumento do Acoplamento (CBO)).*
 
 ### 3.3 Análise Multivariável Combinada
 Para confirmar os achados isolados das RQs, o cruzamento de todas as variáveis ratifica que o LOC atua como o principal ofensor da manutenibilidade arquitetural.
@@ -104,7 +120,7 @@ A análise dos dados confrontou diretamente as premissas informais estabelecidas
 1. **Hipótese 1 (Refutada):** A popularidade não garante qualidade de código. A métrica CBO manteve-se inalterada frente a projetos com poucas ou muitas estrelas.
 2. **Hipótese 2 (Refutada):** A idade do projeto demonstrou ser uma variável estruturalmente neutra, indicando que repositórios ativos conseguem estancar o "apodrecimento" do código ao longo dos anos.
 3. **Hipótese 3 (Refutada):** A alta frequência de *releases* falhou em apresentar uma correlação significativa com a redução de acoplamento, sugerindo que ciclos de entrega rápidos não se traduzem automaticamente em refatoração estrutural.
-4. **Hipótese 4 (Confirmada):** O Tamanho Absoluto (LOC) provou ser o maior (e único) influenciador significativo das métricas de design. A expansão de um software impulsiona diretamente o acoplamento entre classes.
+4. **Hipótese 4 (Confirmada):** O Tamanho Absoluto (LOC) provou ser um influenciador significativo das métricas de design. A expansão de um software impulsiona diretamente o acoplamento entre classes.
 
 ### 4.2 Confronto com a Literatura Recente
 A refutação da Hipótese 1 (Popularidade vs. Qualidade) encontra eco em avaliações empíricas recentes sobre repositórios de código aberto. Estudos como o de Borges et al. (2022) alertam que as "estrelas" no GitHub funcionam muito mais como um mecanismo de *bookmarking* social e engajamento da comunidade do que como um indicador técnico da saúde interna da base de código. Um sistema pode resolver o problema de negócios perfeitamente para o usuário final e, simultaneamente, acumular alto débito técnico (WESSEL et al., 2023).
