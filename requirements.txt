@@ -1,7 +1,9 @@
 requests
 python-dotenv
 rich
+networkx
 pandas
 matplotlib
 seaborn
 scipy
+numpy
