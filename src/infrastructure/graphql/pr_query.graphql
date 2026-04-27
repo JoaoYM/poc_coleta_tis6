@@ -10,6 +10,8 @@ query($prQuery: String!, $cursor: String) {
         ... on PullRequest {
           number
           createdAt
+          additions
+          deletions
           author {
             login
           }
