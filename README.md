@@ -83,8 +83,8 @@ Clone o repositório, crie um ambiente virtual e instale as dependências:
 Bash
 
 ```
-git clone https://github.com/JoaoYM/por_coleta_tis6
-cd coleta_poc
+git clone https://github.com/JoaoYM/poc_coleta_tis6
+cd poc_coleta_tis6
 python -m venv .venv
 
 # Linux/Mac
