@@ -10,13 +10,21 @@ query($prQuery: String!, $cursor: String) {
         ... on PullRequest {
           number
           createdAt
+          mergedAt # NOVO: Para o Time-to-Merge
           additions
           deletions
           author {
             login
           }
+
+          # NOVO: Conta as threads de código (escrutínio in-line)
+          reviewThreads(first: 1) {
+            totalCount
+          }
+
           # Extrai as revisões oficiais (Aprovado, Solicitou Mudanças, etc)
           reviews(first: 50) {
+            totalCount # NOVO
             nodes {
               author {
                 login
@@ -27,6 +35,7 @@ query($prQuery: String!, $cursor: String) {
           }
           # Extrai comentários gerais na linha do tempo do PR
           comments(first: 50) {
+            totalCount # NOVO
             nodes {
               author {
                 login
