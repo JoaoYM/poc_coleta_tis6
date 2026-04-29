@@ -13,6 +13,67 @@ class DataVisualizer:
         # Configuração estética para publicações científicas
         sns.set_theme(style="whitegrid", context="paper")
 
+    def plot_rq1_medians(self, df):
+        plt.figure(figsize=(10, 6))
+        
+        ax = sns.boxplot(x='centrality_group', y='first_review_latency_hours', 
+                         data=df, showfliers=False, palette='Set2')
+        
+        medians = df.groupby(['centrality_group'])['first_review_latency_hours'].median()
+        
+        for i, median_val in enumerate(medians):
+            ax.text(i, median_val + 1, f'Mediana: {median_val:.1f}h', 
+                    horizontalalignment='center', size='large', color='black', weight='semibold')
+
+        plt.title("RQ1: Foco nas Medianas (Mann-Whitney U Justification)", fontsize=14)
+        plt.ylabel("Latência (Horas) - Outliers Omitidos")
+        plt.xlabel("Grupo de Centralidade")
+        # Correção do diretório aqui
+        plt.savefig(self.figures_dir / "rq1_medians_focus.png", dpi=300)
+        plt.close()
+
+    def generate_rq2_frequency_table(self, df):
+        import numpy as np
+        
+        df_novices = df[df['experience_category'] == 'Novice'].copy()
+        
+        bins = [0, 5, 10, 15, 20, 24, 48, np.inf]
+        labels = ['0-5h', '6-10h', '11-15h', '16-20h', '21-24h', '25-48h', '>48h (Zumbis)']
+        
+        df_novices['time_bin'] = pd.cut(df_novices['first_review_latency_hours'], bins=bins, labels=labels, right=False)
+        
+        freq_table = df_novices['time_bin'].value_counts().reset_index()
+        freq_table.columns = ['Intervalo (Horas)', 'Qtd de PRs']
+        freq_table['Porcentagem (%)'] = (freq_table['Qtd de PRs'] / len(df_novices) * 100).round(2)
+        
+        print("\n📊 Tabela de Frequência (Novatos): Tempos de Revisão")
+        print(freq_table.to_string(index=False))
+
+    def plot_rq2_scatter(self, df):
+        df_filtered = df[df['first_review_latency_hours'] <= 72].copy()
+        
+        plt.figure(figsize=(12, 7))
+        
+        sns.scatterplot(
+            data=df_filtered, 
+            x='author_degree_cent', # Correção do nome da coluna
+            y='first_review_latency_hours', 
+            hue='experience_category',
+            style='experience_category',
+            alpha=0.4, 
+            s=20 
+        )
+        
+        plt.title("RQ2: Dispersão - Centralidade vs Latência (Até 72h)", fontsize=14)
+        plt.ylabel("Latência (Horas)")
+        plt.xlabel("Grau de Centralidade do Autor")
+        plt.legend(title="Experiência do Autor")
+        plt.tight_layout()
+        
+        # Correção do diretório aqui
+        plt.savefig(self.figures_dir / "rq2_scatter_dispersion.png", dpi=300)
+        plt.close()
+
     def generate_analytical_plots(self, input_csv: str = "poc_analytical_dataset.csv"):
         input_path = self.data_dir / input_csv
         if not input_path.exists():
@@ -77,5 +138,12 @@ class DataVisualizer:
         output_rq2 = self.figures_dir / "rq2_experience_moderation.png"
         plt.savefig(output_rq2, dpi=300, bbox_inches='tight')
         plt.close()
+
+        # --- ADICIONE ESTAS 3 LINHAS AQUI ---
+        print("📈 Gerando novos gráficos de detalhamento (Medianas, Dispersão e Tabela)...")
+        self.plot_rq1_medians(df_filtered)
+        self.generate_rq2_frequency_table(df)
+        self.plot_rq2_scatter(df)
+        # ------------------------------------
 
         print(f"✅ Gráficos salvos em: {self.figures_dir}")

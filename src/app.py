@@ -21,8 +21,8 @@ def run_phase_1():
     fetcher = RepositoryFetcherFactory.create('http')
     manager = RepositoryManager(fetcher)
     
-    print("🚀 Iniciando Prova de Conceito (POC) - Fase 1: 100 Repositórios")
-    poc_repos = manager.fetch_poc_repositories(repos_per_lang=20)
+    print("🚀 Iniciando Prova de Conceito (POC) - Fase 1: 500 Repositórios")
+    poc_repos = manager.fetch_poc_repositories(repos_per_lang=100)
     
     manager.display_results(poc_repos)
     manager.save_consolidated_data(poc_repos, filename="poc_repos_merged_filter.csv")
