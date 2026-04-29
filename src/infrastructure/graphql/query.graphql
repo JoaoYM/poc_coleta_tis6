@@ -1,6 +1,6 @@
 # Busca repositórios pela linguagem, estrelas e data de push
 query($queryString: String!, $cursor: String) {
-  search(query: $queryString, type: REPOSITORY, first: 20, after: $cursor) {
+  search(query: $queryString, type: REPOSITORY, first: 10, after: $cursor) {
     pageInfo {
       endCursor
       hasNextPage
