@@ -56,7 +56,7 @@ class ReviewDataExtractor:
     def _get_author_experience(self, repo_name: str, author_login: str, reference_date: datetime) -> ExperienceProfile:
         """
         Calcula a Matriz de Experiência e Impacto Formal com janela de decaimento de 24 meses.
-        Utiliza rotina de buscas otimizadas via GraphQL (apenas issueCount).
+        Utiliza rotina de buscas otimizadas via GraphQL com Backoff Exponencial.
         """
         cache_key = f"{repo_name}:{author_login}"
         if cache_key in self.experience_cache:
@@ -83,37 +83,60 @@ class ReviewDataExtractor:
             "searchChanges": f"repo:{repo_name} reviewed-by:{author_login} -author:{author_login} review:changes_requested {date_filter}"
         }
 
-        try:
-            headers = {"Authorization": f"Bearer {self.token}"}
-            response = requests.post(self.api_url, json={'query': query, 'variables': variables}, headers=headers)
-            data = response.json().get('data', {})
-            
-            prior_prs = data.get('authored', {}).get('issueCount', 0)
-            prior_merged = data.get('merged', {}).get('issueCount', 0)
-            approved_reviews = data.get('approved', {}).get('issueCount', 0)
-            changes_reviews = data.get('changes', {}).get('issueCount', 0)
+        # --- LÓGICA BLINDADA: Backoff Exponencial ---
+        max_attempts = 5
+        base_wait_time = 2  # Segundos iniciais
 
-            formal_reviews = approved_reviews + changes_reviews
-            acceptance_rate = (prior_merged / prior_prs) if prior_prs > 0 else 0.0
+        for attempt in range(max_attempts):
+            try:
+                headers = {"Authorization": f"Bearer {self.token}"}
+                response = requests.post(self.api_url, json={'query': query, 'variables': variables}, headers=headers, timeout=15)
+                
+                # Só avança para processar o JSON se o status for 200 (OK)
+                if response.status_code == 200:
+                    data = response.json().get('data', {})
+                    
+                    prior_prs = data.get('authored', {}).get('issueCount', 0)
+                    prior_merged = data.get('merged', {}).get('issueCount', 0)
+                    approved_reviews = data.get('approved', {}).get('issueCount', 0)
+                    changes_reviews = data.get('changes', {}).get('issueCount', 0)
 
-            # Lógica de Classificação Híbrida (Review Authority > Authoring Quality > Volume)
-            if formal_reviews >= 5:
-                category = "Core Reviewer"
-            elif prior_prs >= 2 and acceptance_rate >= 0.75:
-                category = "Reliable Author"
-            elif prior_prs >= 2 and acceptance_rate < 0.75:
-                category = "Noisy Author"
-            else:
-                category = "Novice"
+                    formal_reviews = approved_reviews + changes_reviews
+                    acceptance_rate = (prior_merged / prior_prs) if prior_prs > 0 else 0.0
 
-            profile = ExperienceProfile(prior_prs, round(acceptance_rate, 2), formal_reviews, category)
-            self.experience_cache[cache_key] = profile
-            return profile
+                    # Lógica de Classificação Híbrida (Review Authority > Authoring Quality > Volume)
+                    if formal_reviews >= 5:
+                        category = "Core Reviewer"
+                    elif prior_prs >= 2 and acceptance_rate >= 0.75:
+                        category = "Reliable Author"
+                    elif prior_prs >= 2 and acceptance_rate < 0.75:
+                        category = "Noisy Author"
+                    else:
+                        category = "Novice"
 
-        except Exception as e:
-            print(f"⚠️ Erro ao buscar experiência para {author_login}: {e}")
-            # Fallback seguro caso a API falhe para um usuário específico
-            return ExperienceProfile(0, 0.0, 0, "Novice")
+                    profile = ExperienceProfile(prior_prs, round(acceptance_rate, 2), formal_reviews, category)
+                    self.experience_cache[cache_key] = profile
+                    return profile
+                    
+                # Trata erros temporários do servidor do GitHub (502, 503, 504)
+                elif response.status_code in [502, 503, 504]: 
+                    wait_time = base_wait_time * (2 ** attempt)
+                    print(f"⏳ GitHub sobrecarregado (HTTP {response.status_code}) ao processar {author_login}. Tentativa {attempt+1}/{max_attempts}. Aguardando {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    # Erros de sintaxe ou de permissão (ex: 401, 404) não se resolvem esperando
+                    print(f"⚠️ API retornou HTTP {response.status_code} fatal para {author_login}")
+                    break 
+
+            except Exception as e:
+                # Trata oscilações de rede locais e erros de decode do JSON
+                wait_time = base_wait_time * (2 ** attempt)
+                print(f"🔌 Falha de rede/decode ao buscar {author_login} (Tentativa {attempt+1}/{max_attempts}): {e}. Aguardando {wait_time}s...")
+                time.sleep(wait_time)
+                
+        # Se exauriu o limite de tentativas, registra o log crítico e aplica o Fallback
+        print(f"❌ Abortando cálculo de {author_login} após {max_attempts} falhas consecutivas. Assumindo Fallback (Novice).")
+        return ExperienceProfile(0, 0.0, 0, "Novice")
 
     def extract_prs_from_csv(self, input_csv: str = "poc_repos_merged_filter.csv", start_date: str = "2026-01-01", end_date: str = "2026-02-28"):
         """Coordena a extração blindada lendo os repositórios aprovados da Fase 1,
@@ -172,24 +195,44 @@ class ReviewDataExtractor:
                     "Content-Type": "application/json"
                 }
                 
-                try:
-                    response = requests.post(
-                        self.api_url, 
-                        json={"query": query_content, "variables": variables}, 
-                        headers=headers,
-                        timeout=15 
-                    )
-                    
-                    if response.status_code != 200:
-                        print(f"❌ Erro na API para {repo_name}: HTTP {response.status_code}")
-                        break
-                        
-                except requests.exceptions.RequestException as e:
-                    print(f"🔌 Oscilação de rede detectada: {e}")
-                    print("⏳ Aguardando 10 segundos para estabilizar e tentando novamente...")
-                    time.sleep(10)
-                    continue 
+                # --- NOVO ESCUDO: Backoff Exponencial na Paginação ---
+                success = False
+                max_retries = 5
+                base_wait = 3 # Começa esperando 3 segs para o GitHub respirar
                 
+                for attempt in range(max_retries):
+                    try:
+                        response = requests.post(
+                            self.api_url, 
+                            json={"query": query_content, "variables": variables}, 
+                            headers=headers,
+                            timeout=20 # Aumentei um pouco o timeout local
+                        )
+                        
+                        if response.status_code == 200:
+                            success = True
+                            break # Sai do loop de tentativas, deu certo!
+                            
+                        elif response.status_code in [502, 503, 504]:
+                            wait_time = base_wait * (2 ** attempt)
+                            print(f"⏳ Timeout (HTTP {response.status_code}) no {repo_name}. Paginação engasgou. Tentativa {attempt+1}/{max_retries}. Aguardando {wait_time}s...")
+                            time.sleep(wait_time)
+                            
+                        else:
+                            print(f"❌ Erro fatal na API para {repo_name}: HTTP {response.status_code}")
+                            break # Erro irreversível (ex: 401), desiste das tentativas
+                            
+                    except requests.exceptions.RequestException as e:
+                        wait_time = base_wait * (2 ** attempt)
+                        print(f"🔌 Oscilação de rede na paginação: {e}. Aguardando {wait_time}s...")
+                        time.sleep(wait_time)
+                
+                # Se tentou 5 vezes e não conseguiu, aborta este repositório
+                if not success:
+                    print(f"⏭️ Pulando o restante de {repo_name} após falhas consecutivas de Gateway.")
+                    break 
+                
+                # --- Processamento dos dados (Só roda se success == True) ---
                 data = response.json()
                 
                 if 'errors' in data:
@@ -216,6 +259,7 @@ class ReviewDataExtractor:
                 has_next = page_info.get('hasNextPage', False)
                 cursor = page_info.get('endCursor')
                 
+                # Pausa amigável padrão entre as páginas
                 time.sleep(0.5)
 
             # --- CHECKPOINT DE DISCO (FLUSH DA RAM) ---
@@ -235,8 +279,11 @@ class ReviewDataExtractor:
         self.output.print_save_success(str(output_path))
 
     def _process_pr_node(self, repo_name: str, pr_node: Dict[str, Any], author_login: str) -> Dict[str, Any]:
-        """Extrai as métricas de tempo, esforço e perfil de experiência."""
+        """Extrai as métricas de tempo, esforço, perfil de experiência e escrutínio."""
         pr_created_at = pd.to_datetime(pr_node.get('createdAt'))
+        
+        # NOVO: Data de Merge para Time-to-Merge
+        pr_merged_at = pd.to_datetime(pr_node.get('mergedAt')) if pr_node.get('mergedAt') else None
         
         human_reviews = []
         human_comments_count = 0
@@ -247,7 +294,8 @@ class ReviewDataExtractor:
             if self._is_human(reviewer_login) and reviewer_login != author_login:
                 human_reviews.append({
                     "reviewer": reviewer_login,
-                    "date": pd.to_datetime(review['createdAt'])
+                    "date": pd.to_datetime(review['createdAt']),
+                    "state": review.get('state', 'UNKNOWN') # NOVO: Captura o Estado
                 })
                 
         for comment in pr_node.get('comments', {}).get('nodes', []):
@@ -260,9 +308,10 @@ class ReviewDataExtractor:
             return None
             
         human_reviews.sort(key=lambda x: x['date'])
-        first_review_date = human_reviews[0]['date']
+        first_review = human_reviews[0]
+        first_review_date = first_review['date']
         
-        # --- Cálculo de Latência (Business Hours) ---
+        # --- Cálculo de Latência Inicial (Business Hours) ---
         start_date = pr_created_at.date()
         end_date = first_review_date.date()
         
@@ -275,22 +324,42 @@ class ReviewDataExtractor:
         business_seconds_penalty = weekend_days * 86400
         latency_hours = max(0.0, (total_seconds - business_seconds_penalty) / 3600)
         
-        primary_reviewer = human_reviews[0]['reviewer']
+        # --- Cálculo do Tempo Total de Resolução (Time-to-Merge) ---
+        time_to_merge_hours = 0.0
+        if pr_merged_at:
+            time_to_merge_seconds = (pr_merged_at - pr_created_at).total_seconds()
+            time_to_merge_hours = max(0.0, time_to_merge_seconds / 3600)
 
         # --- Extracao de Novas Variaveis de Controle ---
-        # 1. Busca perfil híbrido no cache/API
+        primary_reviewer = first_review['reviewer']
+        first_review_state = first_review['state']
+        
+        loc_changed = pr_node.get('additions', 0) + pr_node.get('deletions', 0)
         exp_profile = self._get_author_experience(repo_name, author_login, pr_created_at)
         
-        # 2. Esforço de codificação
-        loc_changed = pr_node.get('additions', 0) + pr_node.get('deletions', 0)
+        # --- Métricas de Escrutínio (Otimizadas via totalCount) ---
+        total_comments = pr_node.get('comments', {}).get('totalCount', human_comments_count)
+        total_threads = pr_node.get('reviewThreads', {}).get('totalCount', 0)
+        
+        # Densidade de Comentários In-line (O que o seu slide pede)
+        inline_comment_density = round(total_threads / loc_changed, 4) if loc_changed > 0 else 0.0
 
         return {
             "repository": repo_name,
             "pr_number": pr_node.get('number'),
             "author": author_login,
             "primary_reviewer": primary_reviewer,
+            
+            # Métricas de Velocidade
             "first_review_latency_hours": round(latency_hours, 2),
-            "discussion_volume": len(human_reviews) + human_comments_count,
+            "time_to_merge_hours": round(time_to_merge_hours, 2),
+            
+            # Métricas de Escrutínio
+            "first_review_state": first_review_state,
+            "inline_comment_density": inline_comment_density,
+            "total_discussion_volume": total_comments + len(human_reviews),
+            
+            # Variáveis Independentes e de Controle
             "loc_changed": loc_changed,
             "prior_prs": exp_profile.prior_prs,
             "acceptance_rate": exp_profile.acceptance_rate,
