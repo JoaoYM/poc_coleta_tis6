@@ -96,12 +96,15 @@ class RepositoryOutputFormatter:
         console.print(stats_table)
     
     @staticmethod
-    def print_fetch_start(method: str, pages: int = 100) -> None:
+    def print_fetch_start(method: str, pages: int, max_repos: int = 0) -> None:
         console = Console()
-        total_esperado = pages * 10 
-        console.print(f"🚀 Iniciando coleta de {total_esperado} repositórios (10 por página, {pages} páginas)...", 
-                     style="bold yellow")
-        console.print(f"📡 Método: {method}", style="cyan")
+        if max_repos > 0:
+            console.print(f"🚀 Iniciando coleta de {max_repos} repositórios ({pages} páginas estimadas)...", 
+                          style="bold yellow")
+        else:
+            console.print(f"🚀 Iniciando coleta (Estimativa: {pages} páginas)...", 
+                          style="bold yellow")
+        console.print(f"📡 Método de Busca: {method}", style="cyan")
     
     @staticmethod
     def print_no_repos() -> None:

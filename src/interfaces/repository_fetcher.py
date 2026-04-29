@@ -50,16 +50,16 @@ class BaseRepositoryFetcher(RepositoryFetcher):
         """Each subclass implements its own communication mechanism."""
         pass
 
-    def fetch(self, query_string: str, max_repos: int = 20, save_json: bool = False, save_csv: bool = False) -> List[Dict[str, Any]]:
+    def fetch(self, query_string: str, max_repos: int = 500, save_json: bool = False, save_csv: bool = False) -> List[Dict[str, Any]]:
         query_content = self._get_query_content()
         all_repos: List[Dict[str, Any]] = []
         cursor = None
         
-        # O GitHub GraphQL retorna no máximo 100 por página, mas definimos 20 na query.
+        # O GitHub GraphQL retorna no máximo 100 por página, mas definimos 10 na query.
         # Estimamos as páginas com base no max_repos
-        estimated_pages = (max_repos // 20) + (1 if max_repos % 20 > 0 else 0)
+        estimated_pages = (max_repos // 10) + (1 if max_repos % 10 > 0 else 0)
         
-        self.output.print_fetch_start(self.__class__.__name__, estimated_pages)
+        self.output.print_fetch_start(self.__class__.__name__, estimated_pages, max_repos)
 
         # Utiliza o Context Manager do formatter para abstrair a UI
         with self.output.fetch_progress_context(estimated_pages) as ui_updater:
