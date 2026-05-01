@@ -1,0 +1,17 @@
+# Configuração Global da POC MSR
+# Altere estes valores para rodar diferentes cenários da pesquisa.
+
+collection:
+  target_total_repos: 30
+  target_languages:
+    - TypeScript
+    - Python
+    - JavaScript
+    - Java
+    - C#
+  base_criteria: "stars:>=1000 created:<2023-03-01 pushed:>2025-10-01 sort:stars-desc"
+
+filters:
+  min_prs_per_repo: 200
+  min_stars: 1000
+  min_contributors: 50
