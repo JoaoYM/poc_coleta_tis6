@@ -1,29 +1,31 @@
 from typing import List, Dict, Any
-import pandas as pd
-from src.interfaces.repository_fetcher import RepositoryFetcher
-from src.utils.output_formatter import RepositoryOutputFormatter
+from src.infrastructure.fetchers.contract.repository_fetcher import RepositoryFetcher
+from src.utils.output.output_formatter import RepositoryOutputFormatter
+from src.utils.data.data_exporter import DataExporter
+from src.utils.config.config_manager import ConfigManager # Novo Import
 
 class RepositoryManager:
     def __init__(self, fetcher: RepositoryFetcher):
         self.fetcher = fetcher
         self.output = RepositoryOutputFormatter()
-        # Definição das linguagens alvo da pesquisa
-        self.target_languages = ["TypeScript", "Python", "JavaScript", "Java", "C#"]
+        self.exporter = DataExporter()
+        self.config = ConfigManager() # Inicializa o Singleton
     
-    def fetch_poc_repositories(self, repos_per_lang: int = 20) -> List[Dict[str, Any]]:
+    def fetch_poc_repositories(self) -> List[Dict[str, Any]]:
         """
-        Coordena a coleta de repositórios para cada uma das 5 linguagens.
+        Coordena a coleta usando os parâmetros centralizados no config.yaml.
         """
         all_collected_repos = []
         
-        # Critérios de elegibilidade: 1k+ stars e criado antes de Março/2023
-        base_criteria = "stars:>=1000 created:<2023-03-01 pushed:>2025-10-01 sort:stars-desc"
+        # Lê os parâmetros direto da configuração
+        target_languages = self.config.target_languages
+        base_criteria = self.config.base_criteria
+        repos_per_lang = self.config.repos_per_language
         
-        for lang in self.target_languages:
+        for lang in target_languages:
             query_string = f"language:{lang} {base_criteria}"
-            print(f"\n🔍 Buscando repositórios para a linguagem: [bold]{lang}[/bold]")
+            print(f"\n🔍 Buscando {repos_per_lang} repositórios para a linguagem: [bold]{lang}[/bold]")
             
-            # Chama o fetcher passando a query específica da linguagem
             repos = self.fetcher.fetch(
                 query_string=query_string, 
                 max_repos=repos_per_lang
@@ -44,14 +46,14 @@ class RepositoryManager:
         self.output.print_summary(repos)
         self.output.print_completion(len(repos))
     
-    def save_consolidated_data(self, repos: List[Dict[str, Any]], filename: str = "poc_repos.csv"):
+    def save_consolidated_data(self, repos: List[Dict[str, Any]], base_filename: str = "poc_repos"):
         """
-        Salva os resultados em CSV para análise posterior.
+        Delega o salvamento dos dados para o Exporter em múltiplos formatos.
         """
         if not repos:
             return
         
-        df = pd.DataFrame(repos)
-        output_path = self.fetcher.data_dir / filename
-        df.to_csv(output_path, index=False, encoding='utf-8')
-        self.output.print_save_success(str(output_path))
+        # O Manager não sabe mais onde fica a pasta 'data' nem como um CSV é escrito.
+        # Ele apenas manda o Exporter trabalhar:
+        self.exporter.save_csv(repos, f"{base_filename}.csv")
+        self.exporter.save_json(repos, f"{base_filename}.json")

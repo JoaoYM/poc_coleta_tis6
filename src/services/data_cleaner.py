@@ -65,7 +65,3 @@ class DataCleaner:
         print(f"✂️  Descartados (Anomalias de API): {prs_dropped_by_anomaly} PRs")
         print(f"✅ Total Final Limpo: {len(df_final)} PRs | {df_final['repository'].nunique()} Repositórios saudáveis")
         print("="*50)
-
-# Para rodar:
-cleaner = DataCleaner()
-cleaner.sanitize_extracted_data()
