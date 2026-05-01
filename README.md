@@ -7,7 +7,9 @@
 ## 📝 Sobre o Projeto
 Este repositório hospeda um pipeline automatizado para **Mining Software Repositories (MSR)**. A pesquisa investiga a dinâmica social no GitHub, focando em como a **centralidade de grau** (reputação estrutural) e a **experiência técnica** do autor influenciam a velocidade de resposta e o escrutínio em revisões de código.
 
-> **Hipótese:** Desenvolvedores mais centrais na rede de colaboração possuem uma "vantagem estrutural" que reduz significativamente a latência do primeiro review.
+> **Hipótese 1:** Quanto mais central e bem conectado um desenvolvedor está na rede de co-revisão, mais rápido e suave tende a ser o processo de code review que ele recebe.<br>
+> **Hipótese 2:** A centralidade na rede de co-revisão acelera significativamente o processo de review para desenvolvedores experientes, mas tem um efeito reduzido ou irrelevante para desenvolvedores novatos.<br>
+> **Hipótese 3:** A assimetria de centralidade atua como um 'filtro de prioridade': quanto maior a distância estrutural em favor do revisor (revisor muito central e autor periférico), mais lento é o review. Já a assimetria inversa (autor 'estrela' e revisor periférico) funciona como um acelerador gravitacional.
 
 ---
 
