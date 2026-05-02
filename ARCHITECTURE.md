@@ -101,4 +101,3 @@ Concerne transversais de suporte, organizados em pastas especializadas.
 - **Onde coloco uma nova regra de negócio?** Em `src/models/`, criando uma nova classe ou método (ex.: novo classificador de risco). Se for heurística científica, isole em um módulo dedicado.
 - **Onde adiciono uma nova requisição na API?** Em `src/infrastructure/graphql/`, atualize `pr_query.graphql` ou crie uma nova query. Para transporte, adicione em `fetchers/` se necessário.
 - **Onde crio a análise estatística para a RQ4?** Em `src/services/strategies/`, crie `RQ4Strategy` herdando de `AbstractAnalysisStrategy`, implemente `execute(df)` com testes estatísticos, e registre no `StatisticalAnalyzer`.</content>
-<parameter name="filePath">c:\Users\Joao\Documents\Faculdade\TIs\poc_01_05\poc_coleta_tis6\ARCHITECTURE.md
